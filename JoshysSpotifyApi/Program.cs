@@ -1,18 +1,27 @@
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Change this to add services for controllers AND views.
+
 builder.Services.AddControllersWithViews();
 
-var app = builder.Build();
 
-// Configure the HTTP request pipeline.
-if (!app.Environment.IsDevelopment())
+
+
+builder.Services.AddDistributedMemoryCache();   
+builder.Services.AddSession(options =>
 {
-    
-}
+    options.IdleTimeout = TimeSpan.FromMinutes(30);
+    options.Cookie.HttpOnly = true;
+    options.Cookie.IsEssential = true;
+});
+
+var app = builder.Build();
+app.UseHttpsRedirection();
+
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=Home}/{action=Index}/{id?}");
+    pattern: "{controller=Home}/{action=Index}");
+
+app.UseSession();
 
 app.Run();

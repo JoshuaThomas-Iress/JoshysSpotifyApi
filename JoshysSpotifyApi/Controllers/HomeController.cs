@@ -6,6 +6,7 @@ namespace Main.Controllers
     {
         public IActionResult Index()
         {
+            ViewBag.StatusMessage = TempData["LoginStatus"];
             return View();
         }
     }

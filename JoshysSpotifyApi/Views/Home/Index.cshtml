@@ -3,9 +3,15 @@
     ViewData["Title"] = "Home Page";
 }
 
+@if (ViewBag.StatusMessage != null)
+{
+    <div class="alert alert-success" role="alert">
+        @ViewBag.StatusMessage
+    </div>
+}
+
 <div style="text-align: center; padding: 50px;">
     <h1>My Spotify App</h1>
     <p>Click the button below to connect your Spotify account.</p>
     <a asp-controller="Auth" asp-action="Login" class="btn btn-primary" style="padding: 10px 20px; font-size: 16px;">Login with Spotify</a>
 </div>
-
