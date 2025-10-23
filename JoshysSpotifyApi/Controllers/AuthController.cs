@@ -1,5 +1,7 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using Nancy.Json;
+﻿using System.Net.Http;
+using System.Text.Json.Nodes;
+using Microsoft.AspNetCore.Mvc;
+using Nancy.Diagnostics;
 using Newtonsoft.Json.Linq;
 
 namespace Main.Controllers
@@ -24,6 +26,8 @@ namespace Main.Controllers
 
             return Redirect(spotifyUrl);
         }
+
+
         [HttpGet]
         [Route("/callback")]
         public async Task<IActionResult> Callback(string code, string error)
@@ -32,40 +36,45 @@ namespace Main.Controllers
             {
                 return Content($"Error during authentication: {error}");
             }
-            if (code != null)
+
+           
+            else if (code != null)
             {
                 var clientId = _configuration["Spotify:ClientId"];
                 var clientSecret = _configuration["Spotify:ClientSecret"];
 
-                string clientCredentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
+                string ClientCredentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
 
                 var httpClient = new HttpClient();
+
                 try
                 {
-                    var (Refresh_Token, Access_Token, ResponseJson) = await Access_Token_Process(code, clientCredentials);
+                    // Rename the local variable to avoid CS0136 error
+                    var (refreshTokenOutput, accessToken, responseJson) = await Access_Token_Process(code, ClientCredentials);
 
-                    
+
                     //For testing
-                    string ResponseJson_Temp = ResponseJson.ToString();
-                    var Access_Token_Temp = Access_Token;
-                    var Refresh_Token_Temp = Refresh_Token;
+                    string ResponseJson_Temp = responseJson.ToString();
+                    var Access_Token_Temp = accessToken;
+                    var Refresh_Token_Temp = refreshTokenOutput;
 
                     TempData["ResponseJson"] = ResponseJson_Temp;
                     TempData["Access_Token"] = Access_Token_Temp;
                     TempData["Refresh_Token"] = Refresh_Token_Temp;
-
-
-
-                    return RedirectToAction("Index", "Home");
                 }
                 catch (Exception ex)
                 {
                     return Content($"Error during token retrieval: {ex.Message}");
                 }
 
+                return RedirectToAction("Index", "Home");
             }
+            
+
             return RedirectToAction("Index", "Home");
         }
+
+        
 
         [HttpPost]
         public async Task<(string Refresh_Token, string Access_Token, JObject ResponseJson)> Access_Token_Process(string code, string clientCredentials)
@@ -80,6 +89,7 @@ namespace Main.Controllers
                         { "redirect_uri", "https://127.0.0.1:7071/callback" }
                     };
 
+
             var requestContent = new FormUrlEncodedContent(requestData);
 
             httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", clientCredentials);
@@ -89,11 +99,36 @@ namespace Main.Controllers
             var responseContent = await response.Content.ReadAsStringAsync();
             var ResponseJson = JObject.Parse(responseContent);
             string Access_Token = ResponseJson["access_token"].ToString();
-            string Refresh_Token = ResponseJson["refresh_token"].ToString();
+            string Refresh_Token_Output = ResponseJson["refresh_token"].ToString();
 
-
-            return (Refresh_Token, Access_Token, ResponseJson);
-
+            return (Refresh_Token_Output, Access_Token, ResponseJson);
         }
+
+        [HttpPost]
+        public async Task<(string Refresh_Token, string Access_Token)> Refresh_Token_Process(string refreshToken)
+        {
+
+            var RequestDataBody = new Dictionary<string, string>
+                    {
+                        { "grant_type", "refresh_token" },
+                        { "refresh_token", refreshToken }
+                    };
+            var requestContent = new FormUrlEncodedContent(RequestDataBody);
+
+            // FIX: Instantiate HttpClient instead of using the class name
+            using var httpClient = new HttpClient();
+            using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var ResponseJson = JObject.Parse(responseContent);
+
+            var Access_Token = ResponseJson["access_token"].ToString();
+            var Refresh_Token = ResponseJson["refresh_token"].ToString();
+
+            return (Refresh_Token, Access_Token);
+        }
+
+        
     }
+
 }
