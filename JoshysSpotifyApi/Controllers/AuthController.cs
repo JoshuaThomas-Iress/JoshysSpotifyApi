@@ -24,6 +24,7 @@ namespace Main.Controllers
 
             return Redirect(spotifyUrl);
         }
+        [HttpGet]
         [Route("/callback")]
         public async Task<IActionResult> Callback(string code, string error)
         {
@@ -41,38 +42,21 @@ namespace Main.Controllers
                 var httpClient = new HttpClient();
                 try
                 {
-                    var requestData = new Dictionary<string, string>
-                    {
-                        { "grant_type", "authorization_code" },
-                        { "code", code },                                                           
-                        { "redirect_uri", "https://127.0.0.1:7071/callback" }
-                    };
+                    var (Refresh_Token, Access_Token, ResponseJson) = await Access_Token_Process(code, clientCredentials);
 
-                    var requestContent = new FormUrlEncodedContent(requestData);
+                    
+                    //For testing
+                    string ResponseJson_Temp = ResponseJson.ToString();
+                    var Access_Token_Temp = Access_Token;
+                    var Refresh_Token_Temp = Refresh_Token;
 
-                    httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", clientCredentials);
-
-                    using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
-
-                    var responseContent = await response.Content.ReadAsStringAsync();
-                    var ResponseJson = JObject.Parse(responseContent);
-                    string Access_Token = ResponseJson["access_token"].ToString();
-                    string Refresh_Token = ResponseJson["refresh_token"].ToString();
-                    if (response.IsSuccessStatusCode != true)
-                    {
-                        return RedirectToAction("Index", "Home");
-                    }
-
-                   
-
-                    TempData["ResponseJson"] = ResponseJson;
-                    TempData["Access_Token"] = Access_Token;
-                    TempData["Refresh_Token"] = Refresh_Token;
+                    TempData["ResponseJson"] = ResponseJson_Temp;
+                    TempData["Access_Token"] = Access_Token_Temp;
+                    TempData["Refresh_Token"] = Refresh_Token_Temp;
 
 
 
-                        return RedirectToAction("Index", "Home");
-
+                    return RedirectToAction("Index", "Home");
                 }
                 catch (Exception ex)
                 {
@@ -81,6 +65,35 @@ namespace Main.Controllers
 
             }
             return RedirectToAction("Index", "Home");
+        }
+
+        [HttpPost]
+        public async Task<(string Refresh_Token, string Access_Token, JObject ResponseJson)> Access_Token_Process(string code, string clientCredentials)
+        {
+
+            var httpClient = new HttpClient();
+
+            var requestData = new Dictionary<string, string>
+                    {
+                        { "grant_type", "authorization_code" },
+                        { "code", code },
+                        { "redirect_uri", "https://127.0.0.1:7071/callback" }
+                    };
+
+            var requestContent = new FormUrlEncodedContent(requestData);
+
+            httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", clientCredentials);
+
+            using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
+
+            var responseContent = await response.Content.ReadAsStringAsync();
+            var ResponseJson = JObject.Parse(responseContent);
+            string Access_Token = ResponseJson["access_token"].ToString();
+            string Refresh_Token = ResponseJson["refresh_token"].ToString();
+
+
+            return (Refresh_Token, Access_Token, ResponseJson);
+
         }
     }
 }
