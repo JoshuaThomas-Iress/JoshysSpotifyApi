@@ -4,6 +4,7 @@ using System.Web;
 using Microsoft.AspNetCore.Mvc;
 using Nancy;
 using Newtonsoft.Json.Linq;
+using static System.Net.WebRequestMethods;
 
 namespace Main.Controllers
 {
@@ -18,9 +19,7 @@ namespace Main.Controllers
 
         public IActionResult Index()
         {
-            ViewBag.StatusMessage = TempData["ResponseJson"];
-            ViewBag.StatusMessage = TempData["Access_Token"];
-            ViewBag.StatusMessage = TempData["Refresh_Token"];
+           
 
             return View();
         }
@@ -36,16 +35,18 @@ namespace Main.Controllers
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Access_Token);
             using HttpResponseMessage response = await httpClient.GetAsync("https://api.spotify.com/v1/me");
 
-            if (response.IsSuccessStatusCode)
-            {
-                var responseContent = await response.Content.ReadAsStringAsync();
+            string endpointUrl = "https://api.spotify.com/v1/me";
 
-                return (Refresh_Token);
-            }
-            else
+            // Fix: Await the CallSpotifyApiAsync method and extract the user id from the response
+            JObject userProfile = await CallSpotifyApiAsync(endpointUrl);
+            
+            string User_Id = userProfile["id"]?.ToString();
+            
+            if (User_Id == null)
             {
-                throw new Exception("Failed to retrieve user id from Spotify API.");
-            }
+                throw new Exception();
+            }    
+            return User_Id;
         }
 
 
@@ -53,32 +54,51 @@ namespace Main.Controllers
         [Route("/Playlist/Get_Playlists")]
         public async Task<IActionResult> Get_Playlists()
         {
-            
 
 
-            string Access_Token = HttpContext.Session.GetString("SpotifyAccessToken");
-            string Refresh_Token = HttpContext.Session.GetString("SpotifyRefreshToken");
-
-
-            var httpClient = new HttpClient();
             string User_Id = await Get_User_Id();
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Access_Token);
-            using HttpResponseMessage response = await httpClient.GetAsync($"https://api.spotify.com/v1/users/{User_Id}/playlists");
 
-            string  UserPlaylists = await response.Content.ReadAsStringAsync();
+            string endpointUrl = $"https://api.spotify.com/v1/users/{User_Id}/playlists";
 
-
-            TempData["UserPlaylists"] = UserPlaylists;
             TempData["UserId"] = User_Id;
-
-
 
 
 
             return View("Get_Playlists");
 
         }
-    
+
+        private async Task<JObject> CallSpotifyApiAsync(string endpointUrl)
+        {
+
+            string Access_Token = HttpContext.Session.GetString("SpotifyAccessToken");
+            string Refresh_Token = HttpContext.Session.GetString("SpotifyRefreshToken");
+
+
+            var httpClient = new HttpClient();
+
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Access_Token);
+            using HttpResponseMessage response = await httpClient.GetAsync($"{endpointUrl}");
+            if (response.IsSuccessStatusCode)
+            {
+                string UserPlaylists = await response.Content.ReadAsStringAsync();
+
+
+                TempData["UserPlaylists"] = UserPlaylists;
+
+
+                var ResponseJson = JObject.Parse(UserPlaylists);
+
+
+                return (ResponseJson);
+
+            }
+            else
+            {
+                throw new Exception($"Failed to call Spotify API: {response.StatusCode}");
+            }
+        }
+
     }
 }
 
