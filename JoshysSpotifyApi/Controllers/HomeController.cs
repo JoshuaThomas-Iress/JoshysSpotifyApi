@@ -1,10 +1,6 @@
 ﻿using System.Net.Http.Headers;
-using System.Runtime.CompilerServices;
-using System.Web;
 using Microsoft.AspNetCore.Mvc;
-using Nancy;
 using Newtonsoft.Json.Linq;
-using static System.Net.WebRequestMethods;
 
 namespace Main.Controllers
 {
@@ -37,7 +33,7 @@ namespace Main.Controllers
 
             string endpointUrl = "https://api.spotify.com/v1/me";
 
-            // Fix: Await the CallSpotifyApiAsync method and extract the user id from the response
+            
             JObject userProfile = await CallSpotifyApiAsync(endpointUrl);
             
             string User_Id = userProfile["id"]?.ToString();
@@ -62,12 +58,19 @@ namespace Main.Controllers
 
             TempData["UserId"] = User_Id;
 
+            var response = await CallSpotifyApiAsync(endpointUrl);
 
+            ViewBag.Playlists_Name = response["items"];
+            ViewBag.Playlists_Total = response["total"];
 
             return View("Get_Playlists");
 
         }
 
+
+
+
+        [HttpGet]   
         private async Task<JObject> CallSpotifyApiAsync(string endpointUrl)
         {
 

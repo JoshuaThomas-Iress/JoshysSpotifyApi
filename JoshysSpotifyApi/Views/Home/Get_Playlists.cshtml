@@ -18,3 +18,17 @@
     </div>
 } *@
 
+@{
+	int count = 0;
+    foreach (var playlist in ViewBag.Playlists_Name)
+    {
+        <p>@playlist["name"]</p>
+		if (++count == 7) break;
+    }
+
+}
+
+
+@{
+	<p>Total Playlists: @ViewBag.Playlists_Total</p>
+}
