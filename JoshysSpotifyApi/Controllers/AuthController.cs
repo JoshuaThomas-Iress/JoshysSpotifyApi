@@ -1,7 +1,5 @@
-﻿using System.Net.Http;
-using System.Text.Json.Nodes;
+﻿using System.Web;
 using Microsoft.AspNetCore.Mvc;
-using Nancy.Diagnostics;
 using Newtonsoft.Json.Linq;
 
 namespace Main.Controllers
@@ -15,17 +13,41 @@ namespace Main.Controllers
             _configuration = configuration;
         }
 
-        public IActionResult Login()
+        public IActionResult Login(bool? fromPlaylist = false)
         {
-            var clientId = _configuration["Spotify:ClientId"];
 
-            var redirectUri = "https://127.0.0.1:7071/callback";
-            const string scope = "user-read-private playlist-modify-public";
+
+
+            if (fromPlaylist == true)
+            {
+                string spotifyUrl = Login_Helper();
+                TempData["ReturnUrl"] = "Playlist";
+                return Redirect(spotifyUrl);
+
+            }
+            else
+            {
+                string spotifyUrl = Login_Helper();
+                return Redirect(spotifyUrl);
+            }
+
+
+        }
+
+        private string Login_Helper()
+        {
+            var redirectUri = HttpUtility.UrlEncode("https://127.0.0.1:7071/callback");
+            var scope = HttpUtility.UrlEncode("user-read-private playlist-modify-public");
+
+            var clientId = _configuration["Spotify:ClientId"];
 
             var spotifyUrl = $"https://accounts.spotify.com/authorize?client_id={clientId}&response_type=code&redirect_uri={redirectUri}&scope={scope}";
 
-            return Redirect(spotifyUrl);
+            return spotifyUrl;
         }
+
+
+
 
 
         [HttpGet]
@@ -37,7 +59,7 @@ namespace Main.Controllers
                 return Content($"Error during authentication: {error}");
             }
 
-           
+
             else if (code != null)
             {
                 var clientId = _configuration["Spotify:ClientId"];
@@ -50,39 +72,58 @@ namespace Main.Controllers
                 try
                 {
                     // Rename the local variable to avoid CS0136 error
-                    var (refreshTokenOutput, accessToken, responseJson) = await Access_Token_Process(code, ClientCredentials);
+                    var (refreshToken, accessToken, responseJson) = await Access_Token_Process(code, ClientCredentials);
 
 
                     //For testing
                     string ResponseJson_Temp = responseJson.ToString();
                     var Access_Token_Temp = accessToken;
-                    var Refresh_Token_Temp = refreshTokenOutput;
+                    var Refresh_Token_Temp = refreshToken;
 
-                    TempData["ResponseJson"] = ResponseJson_Temp;
-                    TempData["Access_Token"] = Access_Token_Temp;
+                    //TempData["ResponseJson"] = ResponseJson_Temp;
+                    //TempData["Access_Token"] = Access_Token_Temp;
                     TempData["Refresh_Token"] = Refresh_Token_Temp;
+
+
+                    HttpContext.Session.SetString("SpotifyAccessToken", accessToken);
+                    HttpContext.Session.SetString("SpotifyRefreshToken", refreshToken);
+
+                    if (string.IsNullOrEmpty(accessToken) || string.IsNullOrEmpty(refreshToken))
+                    {
+
+                        return Content("Failed to retrieve tokens from Spotify.");
+                    }
+
                 }
                 catch (Exception ex)
                 {
                     return Content($"Error during token retrieval: {ex.Message}");
                 }
 
+                if (TempData["ReturnUrl"] != null && TempData["ReturnUrl"].ToString() == "Playlist")
+
+                {
+                    return RedirectToAction("Get_Playlists", "Home");
+                }
+
+
+
                 return RedirectToAction("Index", "Home");
             }
-            
+
 
             return RedirectToAction("Index", "Home");
         }
 
-        
+
 
         [HttpPost]
         public async Task<(string Refresh_Token, string Access_Token, JObject ResponseJson)> Access_Token_Process(string code, string clientCredentials)
         {
+           
+                var httpClient = new HttpClient();
 
-            var httpClient = new HttpClient();
-
-            var requestData = new Dictionary<string, string>
+                var requestData = new Dictionary<string, string>
                     {
                         { "grant_type", "authorization_code" },
                         { "code", code },
@@ -90,18 +131,24 @@ namespace Main.Controllers
                     };
 
 
-            var requestContent = new FormUrlEncodedContent(requestData);
+                var requestContent = new FormUrlEncodedContent(requestData);
 
-            httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", clientCredentials);
+                httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", clientCredentials);
+       
+                using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var ResponseJson = JObject.Parse(responseContent);
+                string Access_Token = ResponseJson["access_token"].ToString();
+                string Refresh_Token_Output = ResponseJson["refresh_token"].ToString();
 
-            using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var ResponseJson = JObject.Parse(responseContent);
-            string Access_Token = ResponseJson["access_token"].ToString();
-            string Refresh_Token_Output = ResponseJson["refresh_token"].ToString();
-
-            return (Refresh_Token_Output, Access_Token, ResponseJson);
+                return (Refresh_Token_Output, Access_Token, ResponseJson);
+            }
+            else
+            {
+                return (null, null, null);
+            }
         }
 
         [HttpPost]
@@ -115,7 +162,7 @@ namespace Main.Controllers
                     };
             var requestContent = new FormUrlEncodedContent(RequestDataBody);
 
-            // FIX: Instantiate HttpClient instead of using the class name
+
             using var httpClient = new HttpClient();
             using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
 
@@ -128,7 +175,8 @@ namespace Main.Controllers
             return (Refresh_Token, Access_Token);
         }
 
-        
+
     }
+
 
 }
