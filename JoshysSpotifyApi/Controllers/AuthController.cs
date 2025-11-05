@@ -1,4 +1,5 @@
-﻿using System.Web;
+﻿using System.Net.Http;
+using System.Web;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json.Linq;
 
@@ -6,11 +7,14 @@ namespace Main.Controllers
 {
     public class AuthController : Controller
     {
+        private readonly IHttpClientFactory _httpClientFactory;
+
         private readonly IConfiguration _configuration;
 
-        public AuthController(IConfiguration configuration)
+        public AuthController(IConfiguration configuration, IHttpClientFactory httpClientFactory)
         {
             _configuration = configuration;
+            _httpClientFactory = httpClientFactory;
         }
 
         public IActionResult Login(bool? fromPlaylist = false)
@@ -37,7 +41,7 @@ namespace Main.Controllers
         private string Login_Helper()
         {
             var redirectUri = HttpUtility.UrlEncode("https://127.0.0.1:7071/callback");
-            var scope = HttpUtility.UrlEncode("user-read-private playlist-modify-public");
+            var scope = HttpUtility.UrlEncode("user-read-private playlist-modify-public user-read-private user-read-email playlist-read-collaborative");
 
             var clientId = _configuration["Spotify:ClientId"];
 
@@ -67,7 +71,7 @@ namespace Main.Controllers
 
                 string ClientCredentials = Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
 
-                var httpClient = new HttpClient();
+                var httpClient = _httpClientFactory.CreateClient();
 
                 try
                 {
@@ -120,10 +124,10 @@ namespace Main.Controllers
         [HttpPost]
         public async Task<(string Refresh_Token, string Access_Token, JObject ResponseJson)> Access_Token_Process(string code, string clientCredentials)
         {
-           
-                var httpClient = new HttpClient();
 
-                var requestData = new Dictionary<string, string>
+            var httpClient = _httpClientFactory.CreateClient();
+
+            var requestData = new Dictionary<string, string>
                     {
                         { "grant_type", "authorization_code" },
                         { "code", code },
@@ -155,6 +159,8 @@ namespace Main.Controllers
         public async Task<(string Refresh_Token, string Access_Token)> Refresh_Token_Process(string refreshToken)
         {
 
+            Console.WriteLine("helloworld");
+
             var RequestDataBody = new Dictionary<string, string>
                     {
                         { "grant_type", "refresh_token" },
@@ -163,7 +169,7 @@ namespace Main.Controllers
             var requestContent = new FormUrlEncodedContent(RequestDataBody);
 
 
-            using var httpClient = new HttpClient();
+            var httpClient = _httpClientFactory.CreateClient();
             using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
 
             var responseContent = await response.Content.ReadAsStringAsync();

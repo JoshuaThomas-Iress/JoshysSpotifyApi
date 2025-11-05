@@ -1,0 +1,35 @@
+﻿
+@{
+    ViewData["Title"] = "Get_podcasts";
+}
+
+<h1>Get_podcasts</h1>
+
+<div style="text-align: center; padding: 50px;">
+    <h1>Search Podcasts</h1>
+    <p>Click the button below to search for podcasts.</p>
+
+    <form method="post" action="/Home/Get_Podcasts">
+        <input type="text" name="query" placeholder="Enter podcast name" />
+        <button type="submit">Search</button>
+    </form>
+    <div>
+    @{
+        if (ViewBag.PodcastSearchResults != null  )
+        {
+            int count = 0;
+            foreach (var shows in ViewBag.PodcastSearchResults)
+            {
+                
+
+                <h3>@shows["name"]</h3>
+                <p>@shows["description"]</p>
+                
+                if (++count == 5) break;
+            }           
+        }
+
+
+        }
+    </div>
+</div>
