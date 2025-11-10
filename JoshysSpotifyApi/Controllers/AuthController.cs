@@ -1,4 +1,5 @@
 ﻿using System.Net.Http;
+using System.Net.Http.Headers;
 using System.Web;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json.Linq;
@@ -8,14 +9,23 @@ namespace Main.Controllers
     public class AuthController : Controller
     {
         private readonly IHttpClientFactory _httpClientFactory;
-
         private readonly IConfiguration _configuration;
+        private readonly ILogger<AuthController> _logger;
 
-        public AuthController(IConfiguration configuration, IHttpClientFactory httpClientFactory)
+
+        private readonly SharedAuthHome _sharedAuthHome;
+
+        public AuthController(IConfiguration configuration,
+                              IHttpClientFactory httpClientFactory,
+                              ILogger<AuthController> logger,
+                              SharedAuthHome sharedAuthHome)
         {
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
+            _logger = logger;
+            _sharedAuthHome = sharedAuthHome;
         }
+
 
         public IActionResult Login(bool? fromPlaylist = false)
         {
@@ -76,7 +86,7 @@ namespace Main.Controllers
                 try
                 {
                     // Rename the local variable to avoid CS0136 error
-                    var (refreshToken, accessToken, responseJson) = await Access_Token_Process(code, ClientCredentials);
+                    var (refreshToken, accessToken, responseJson) = await _sharedAuthHome.Access_Token_Process(code, ClientCredentials);
 
 
                     //For testing
@@ -121,68 +131,10 @@ namespace Main.Controllers
 
 
 
-        [HttpPost]
-        public async Task<(string Refresh_Token, string Access_Token, JObject ResponseJson)> Access_Token_Process(string code, string clientCredentials)
-        {
-
-            var httpClient = _httpClientFactory.CreateClient();
-
-            var requestData = new Dictionary<string, string>
-                    {
-                        { "grant_type", "authorization_code" },
-                        { "code", code },
-                        { "redirect_uri", "https://127.0.0.1:7071/callback" }
-                    };
-
-
-                var requestContent = new FormUrlEncodedContent(requestData);
-
-                httpClient.DefaultRequestHeaders.Authorization = new System.Net.Http.Headers.AuthenticationHeaderValue("Basic", clientCredentials);
-       
-                using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
-            if (response.IsSuccessStatusCode)
-            {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var ResponseJson = JObject.Parse(responseContent);
-                string Access_Token = ResponseJson["access_token"].ToString();
-                string Refresh_Token_Output = ResponseJson["refresh_token"].ToString();
-
-                return (Refresh_Token_Output, Access_Token, ResponseJson);
-            }
-            else
-            {
-                return (null, null, null);
-            }
-        }
-
-        [HttpPost]
-        public async Task<(string Refresh_Token, string Access_Token)> Refresh_Token_Process(string refreshToken)
-        {
-
-            Console.WriteLine("helloworld");
-
-            var RequestDataBody = new Dictionary<string, string>
-                    {
-                        { "grant_type", "refresh_token" },
-                        { "refresh_token", refreshToken }
-                    };
-            var requestContent = new FormUrlEncodedContent(RequestDataBody);
-
-
-            var httpClient = _httpClientFactory.CreateClient();
-            using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
-
-            var responseContent = await response.Content.ReadAsStringAsync();
-            var ResponseJson = JObject.Parse(responseContent);
-
-            var Access_Token = ResponseJson["access_token"].ToString();
-            var Refresh_Token = ResponseJson["refresh_token"].ToString();
-
-            return (Refresh_Token, Access_Token);
-        }
-
-
     }
+
+        
 
 
 }
+

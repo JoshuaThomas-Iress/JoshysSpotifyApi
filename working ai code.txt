@@ -1,0 +1,276 @@
+using System.Net.Http.Headers;
+using System.Net; // You need this for HttpStatusCode
+using System.Text; // You need this for Encoding
+using System.Web;
+using Microsoft.AspNetCore.Mvc;
+using Newtonsoft.Json.Linq;
+
+namespace Main.Controllers
+{
+    public class HomeController : Controller
+    {
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<HomeController> _logger; 
+
+        public HomeController(IConfiguration configuration, IHttpClientFactory httpClientFactory, ILogger<HomeController> logger)
+        {
+            _configuration = configuration;
+            _httpClientFactory = httpClientFactory;
+            _logger = logger; 
+        }
+
+        public IActionResult Index()
+        {
+            return View();
+        }
+
+        [HttpGet]
+        public async Task<string> Get_User_Id()
+        {
+            try
+            {
+                string endpointUrl = "https://api.spotify.com/v1/me";
+                JObject userProfile = await CallSpotifyApiAsync(endpointUrl);
+                string User_Id = userProfile["id"]?.ToString();
+
+                if (User_Id == null)
+                {
+                    throw new Exception("User_Id was null");
+                }
+                return User_Id;
+            }
+            catch (SpotifyUnauthorizedException)
+            {
+                // This will be caught, but a redirect isn't possible here.
+                // The Get_Playlists method will handle the redirect.
+                throw; 
+            }
+        }
+
+
+        [HttpGet]
+        [Route("/Playlist/Get_Playlists")]
+        public async Task<IActionResult> Get_Playlists()
+        {
+            try
+            {
+                string User_Id = await Get_User_Id();
+                string endpointUrl = $"https://api.spotify.com/v1/users/{User_Id}/playlists";
+                TempData["UserId"] = User_Id;
+                var response = await CallSpotifyApiAsync(endpointUrl);
+
+                ViewBag.Playlists_Name = response?["items"]; // Safe null-check
+                ViewBag.Playlists_Total = response?["total"]; // Safe null-check
+
+                return View("Get_Playlists");
+            }
+            catch (SpotifyUnauthorizedException)
+            {
+                _logger.LogWarning("Spotify token expired or invalid. Redirecting to login.");
+                return RedirectToAction("Login", "Auth");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "An error occurred in Get_Playlists");
+                ViewBag.Error = ex.Message;
+                return View("Get_Playlists"); // Return view with error
+            }
+        }
+
+        /// <summary>
+        /// This is the new helper method to refresh your access token.
+        /// </summary>
+        private async Task<string> GetRefreshedAccessToken()
+        {
+            _logger.LogInformation("Attempting to refresh Spotify access token.");
+            string refreshToken = HttpContext.Session.GetString("SpotifyRefreshToken");
+            if (string.IsNullOrEmpty(refreshToken))
+            {
+                _logger.LogWarning("No refresh token found in session. Forcing re-login.");
+                throw new SpotifyUnauthorizedException();
+            }
+
+            var clientId = _configuration["Spotify:ClientId"];
+            // This is the line that was failing.
+            var clientSecret = _configuration["Spotify:ClientSecret"]; 
+
+            // This check is VITAL. Your server crashes if ClientSecret is missing or null.
+            if (string.IsNullOrEmpty(clientSecret))
+            {
+                _logger.LogError("Spotify:ClientSecret is not configured in appsettings.json or User Secrets.");
+                _logger.LogError("Please ensure your User Secrets file has the format: { \"Spotify\": { \"ClientSecret\": \"...\" } }");
+                throw new Exception("Application is not configured with a Spotify ClientSecret.");
+            }
+            
+            var clientCredentials = Convert.ToBase64String(Encoding.UTF8.GetBytes($"{clientId}:{clientSecret}"));
+            
+            var httpClient = _httpClientFactory.CreateClient();
+            var requestData = new Dictionary<string, string>
+            {
+                { "grant_type", "refresh_token" },
+                { "refresh_token", refreshToken }
+            };
+
+            var requestContent = new FormUrlEncodedContent(requestData);
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", clientCredentials);
+
+            using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
+
+            if (response.IsSuccessStatusCode)
+            {
+                var responseContent = await response.Content.ReadAsStringAsync();
+                var responseJson = JObject.Parse(responseContent);
+                string newAccessToken = responseJson["access_token"].ToString();
+                
+                string newRefreshToken = responseJson["refresh_token"]?.ToString();
+
+                HttpContext.Session.SetString("SpotifyAccessToken", newAccessToken);
+                if (!string.IsNullOrEmpty(newRefreshToken))
+                {
+                    HttpContext.Session.SetString("SpotifyRefreshToken", newRefreshToken);
+                    _logger.LogInformation("Successfully refreshed access token and refresh token.");
+                }
+                else
+                {
+                     _logger.LogInformation("Successfully refreshed access token. (No new refresh token issued)");
+                }
+
+                return newAccessToken;
+            }
+            else
+            {
+                // Refresh failed. The refresh token is probably bad. Force a full re-login.
+                _logger.LogError("Failed to refresh token. Status: {StatusCode}. Forcing re-login.", response.StatusCode);
+                throw new SpotifyUnauthorizedException();
+            }
+        }
+
+        /// <summary>
+        /// This method is now "smart" and will try to refresh the token on failure.
+        /// </summary>
+        [HttpGet]
+        private async Task<JObject> CallSpotifyApiAsync(string endpointUrl)
+        {
+            var httpClient = _httpClientFactory.CreateClient();
+            string accessToken = HttpContext.Session.GetString("SpotifyAccessToken");
+
+            if (string.IsNullOrEmpty(accessToken))
+            {
+                _logger.LogWarning("No access token in session. Forcing re-login.");
+                throw new SpotifyUnauthorizedException();
+            }
+
+            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            using HttpResponseMessage response = await httpClient.GetAsync($"{endpointUrl}");
+
+            if (response.IsSuccessStatusCode)
+            {
+                // Success on the first try
+                string content = await response.Content.ReadAsStringAsync();
+                return JObject.Parse(content);
+            }
+            
+            // Check for token errors (401) or bad/expired token (400)
+            if (response.StatusCode == HttpStatusCode.Unauthorized || response.StatusCode == HttpStatusCode.BadRequest)
+            {
+                // Token error! Let's try to refresh.
+                _logger.LogWarning("Spotify API call failed (401/400). Token may be expired. Attempting refresh...");
+                try
+                {
+                    string newAccessToken = await GetRefreshedAccessToken();
+                    
+                    // Refresh successful! Let's retry the original API call.
+                    httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", newAccessToken);
+                    using HttpResponseMessage retryResponse = await httpClient.GetAsync($"{endpointUrl}");
+
+                    if (retryResponse.IsSuccessStatusCode)
+                    {
+                        _logger.LogInformation("Successfully retried API call with new token.");
+                        string content = await retryResponse.Content.ReadAsStringAsync();
+                        return JObject.Parse(content);
+                    }
+                    else
+                    {
+                        // The retry failed for some other reason
+                        _logger.LogError("API call retry failed even after token refresh. Status: {StatusCode}", retryResponse.StatusCode);
+                        throw new Exception($"Failed to call Spotify API on retry: {retryResponse.StatusCode}");
+                    }
+                }
+                catch (SpotifyUnauthorizedException)
+                {
+                    // This was thrown by GetRefreshedAccessToken(). Pass it up.
+                    throw; 
+                }
+            }
+            else
+            {
+                // Some other error (500, 404, etc.)
+                throw new Exception($"Failed to call Spotify API: {response.StatusCode}");
+            }
+        }
+
+        /// <summary>
+        /// This is the new, fully-fixed Get_Podcasts method.
+        /// </summary>
+        [ResponseCache(Location = ResponseCacheLocation.None, NoStore = true)] // Prevents browser caching
+        [HttpGet]
+        public async Task<IActionResult> Get_Podcasts(string query)
+        {
+            // First, check if we're even logged in.
+            var token = HttpContext.Session.GetString("SpotifyAccessToken");
+            if (string.IsNullOrEmpty(token))
+            {
+                _logger.LogWarning("User tried to access Get_Podcasts without a token.");
+                return RedirectToAction("Login", "Auth");
+            }
+
+            ViewBag.Query = query; // Keeps search term in the box
+
+            if (!string.IsNullOrEmpty(query))
+            {
+                try
+                {
+                    string Encoded_Query = HttpUtility.UrlEncode(query);
+                    string endpointUrl = $"https://api.spotify.com/v1/search?q={Encoded_Query}&type=show";
+                    
+                    // This call is now smart enough to refresh the token on its own
+                    var response = await CallSpotifyApiAsync(endpointUrl); 
+
+                    // Safely check for "shows" and "items" to prevent NullReferenceException
+                    var shows = response?["shows"];
+                    if (shows != null)
+                    {
+                        ViewBag.PodcastSearchResults = shows["items"];
+                    }
+                    else
+                    {
+                        ViewBag.PodcastSearchResults = null; // No results
+                    }
+                    
+                    _logger.LogInformation("--- GET_PODCASTS (GET) METHOD HIT ---");
+                }
+                catch (SpotifyUnauthorizedException)
+                {
+                    // This will now only be caught if the REFRESH itself fails.
+                    _logger.LogWarning("Spotify token was expired AND refresh failed. Redirecting to Auth/Login.");
+                    return RedirectToAction("Login", "Auth");
+Two                }
+                catch (Exception ex)
+                {
+                    // This catches all other crashes (like network errors or config errors)
+                    _logger.LogError(ex, "An error occurred while searching podcasts");
+                    ViewBag.Error = "An error occurred: " + ex.Message; 
+                }
+            }
+            
+            return View("Get_Podcasts");
+        }
+    }
+
+    /// <summary>
+    /// A custom exception to signal that Spotify authentication failed
+    /// and a re-login (not just a refresh) is required.
+    /// </summary>
+    public class SpotifyUnauthorizedException : Exception { }
+}

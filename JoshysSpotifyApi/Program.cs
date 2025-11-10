@@ -1,7 +1,8 @@
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
-
+builder.Services.AddHttpContextAccessor(); 
+builder.Services.AddScoped<Main.Controllers.SharedAuthHome>();
 builder.Services.AddHttpClient();
 
 builder.Services.AddDistributedMemoryCache();

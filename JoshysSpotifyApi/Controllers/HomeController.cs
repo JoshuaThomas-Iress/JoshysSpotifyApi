@@ -1,11 +1,11 @@
-﻿using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text.Encodings.Web;
+﻿using System.Collections.Generic;
 using System.Web;
+using Main.Models;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Build.Framework;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Nest;
 using Newtonsoft.Json.Linq;
-using Microsoft.Extensions.Logging; // Add this using directive
+using static System.Net.WebRequestMethods;
 
 namespace Main.Controllers
 {
@@ -13,13 +13,20 @@ namespace Main.Controllers
     {
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
-        private readonly ILogger<HomeController> _logger; // Add logger field
+        private readonly ILogger<HomeController> _logger;
 
-        public HomeController(IConfiguration configuration, IHttpClientFactory httpClientFactory, ILogger<HomeController> logger) // Add logger parameter
+
+        private readonly SharedAuthHome _sharedAuthHome;
+
+        public HomeController(IConfiguration configuration,
+                              IHttpClientFactory httpClientFactory,
+                              ILogger<HomeController> logger,
+                              SharedAuthHome sharedAuthHome)
         {
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
-            _logger = logger; // Assign logger
+            _logger = logger;
+            _sharedAuthHome = sharedAuthHome;
         }
 
         public IActionResult Index()
@@ -32,18 +39,13 @@ namespace Main.Controllers
         [HttpGet]
         public async Task<string> Get_User_Id()
         {
-            var httpClient = _httpClientFactory.CreateClient();
 
-            string Access_Token = HttpContext.Session.GetString("SpotifyAccessToken");
-            string Refresh_Token = HttpContext.Session.GetString("SpotifyRefreshToken");
 
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Access_Token);
-            using HttpResponseMessage response = await httpClient.GetAsync("https://api.spotify.com/v1/me");
 
             string endpointUrl = "https://api.spotify.com/v1/me";
 
 
-            JObject userProfile = await CallSpotifyApiAsync(endpointUrl);
+            JObject userProfile = await _sharedAuthHome.CallSpotifyApiAsync(endpointUrl);
 
             string User_Id = userProfile["id"]?.ToString();
 
@@ -67,7 +69,7 @@ namespace Main.Controllers
 
             TempData["UserId"] = User_Id;
 
-            var response = await CallSpotifyApiAsync(endpointUrl);
+            var response = await _sharedAuthHome.CallSpotifyApiAsync(endpointUrl);
 
             ViewBag.Playlists_Name = response["items"];
             ViewBag.Playlists_Total = response["total"];
@@ -79,62 +81,84 @@ namespace Main.Controllers
 
 
 
+
+
+
         [HttpGet]
-        private async Task<JObject> CallSpotifyApiAsync(string endpointUrl)
-        {
-
-            string Access_Token = HttpContext.Session.GetString("SpotifyAccessToken");
-            string Refresh_Token = HttpContext.Session.GetString("SpotifyRefreshToken");
-
-
-            var httpClient = _httpClientFactory.CreateClient();
-
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Access_Token);
-            using HttpResponseMessage response = await httpClient.GetAsync($"{endpointUrl}");
-            if (response.IsSuccessStatusCode)
-            {
-                string UserPlaylists = await response.Content.ReadAsStringAsync();
-
-
-                TempData["UserPlaylists"] = UserPlaylists;
-
-
-                var ResponseJson = JObject.Parse(UserPlaylists);
-
-
-                return (ResponseJson);
-
-            }
-            else
-            {
-                throw new Exception($"Failed to call Spotify API: {response.StatusCode}");
-            }
-
-        }
-        [HttpGet]
-
-        public async Task<IActionResult> Get_Podcasts()
-        {
-            return View("Get_Podcasts");
-        }
-
-        [HttpPost]
         public async Task<IActionResult> Get_Podcasts(string query)
         {
-            // Call Spotify API to search for tracks, albums, or artists
-            string Encoded_Query = HttpUtility.UrlEncode(query);
-            string endpointUrl = $"https://api.spotify.com/v1/search?q={Encoded_Query}&type=show";
-            var response = await CallSpotifyApiAsync(endpointUrl);
+            List<ShowModel> shows = new List<ShowModel>();
 
-            // Pass the search results to the view
-            ViewBag.PodcastSearchResults = response["shows"]["items"];
-            _logger.LogInformation("--- GET_PODCASTS (GET) METHOD HIT ---"); // Use _logger instead of ILogger
-            return View("Get_Podcasts");
+            if (!string.IsNullOrEmpty(query))
+            {
+                string Encoded_Query = HttpUtility.UrlEncode(query);
+                string endpointUrl = $"https://api.spotify.com/v1/search?q={Encoded_Query}&type=show";
+
+                var response = await _sharedAuthHome.CallSpotifyApiAsync(endpointUrl);
+
+                _logger.LogInformation("--- GET_PODCASTS (GET) METHOD HIT ---");
+
+                int count = 0;
+
+                foreach (var item in response["shows"]?["items"])
+                {
+                    var show = new ShowModel
+                    {
+                        Id = new List<string> { item["id"]?.ToString() },
+                        Name = item["name"]?.ToString(),
+                        Description = item["description"]?.ToString()
+                    };
+
+
+                    if (show.Id != null && show.Id.Count > 0)
+                    {
+
+
+                        foreach (string Id in show.Id)
+                        {
+                            
+                            var Episodes = await Get_Podcasts_Episodes(Id);
+                        }
+
+                    }
+                   
+
+                    shows.Add(show);
+
+                    if (++count == 5) break;
+                }
+            }
+
+            return View("Get_Podcasts", shows);
         }
+
+
+
+        private async Task<string> Get_Podcasts_Episodes(string ids)
+        {
+            string episodes =  "";
+
+
+
+            string endpointUrl = $"https://api.spotify.com/v1/shows/{ids}/episodes?limit=5";
+            var response = await _sharedAuthHome.CallSpotifyApiAsync(endpointUrl);
+
+           
+                // Fix: Cast 'response["episodes"]?["items"]' to JArray to allow indexing
+                foreach (var item in (response["episodes"]?["items"] as JArray) ?? new JArray())
+                {
+                    var episode = new EpisodeModel
+                    {
+                        Name = item["name"]?.ToString(),
+                        Description = item["description"]?.ToString()
+                    };
+                }
+                return episodes;
+
+        }
+            
+
     }
 }
-
-
-
 
 
