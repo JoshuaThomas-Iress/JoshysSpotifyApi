@@ -51,7 +51,7 @@ namespace Main.Controllers
         private string Login_Helper()
         {
             var redirectUri = HttpUtility.UrlEncode("https://127.0.0.1:7071/callback");
-            var scope = HttpUtility.UrlEncode("user-read-private playlist-modify-public user-read-private user-read-email playlist-read-collaborative");
+            var scope = HttpUtility.UrlEncode("user-read-private playlist-modify-public playlist-modify-private user-read-email playlist-read-collaborative");
 
             var clientId = _configuration["Spotify:ClientId"];
 

@@ -24,20 +24,19 @@
 			
 			if (Model != null)
 			{
-			
-
-				foreach (var show in Model )
+				foreach (var show in Model)
 				{
 					<h3>@show.Name</h3>
 					<p>@show.Description</p>
-					
-						var Episodes = show.Episodes;
-						
-						foreach (var episode in Episodes)
-						{
-							
-							<p>@episode.Name</p>
-						}
+
+					var firstFiveEpisodes = show.Episodes.Take(5);
+
+					// 2. Loop through just those 5
+					foreach (var episode in firstFiveEpisodes)
+					{
+						// 3. Print each one's name ONCE
+						<p>@episode.Name</p>
+					}
 						
 				}
 			}

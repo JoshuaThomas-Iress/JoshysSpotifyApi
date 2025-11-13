@@ -1,12 +1,7 @@
-﻿using System.Net.Http;
-using System.Net.Http.Headers;
-using Microsoft.AspNetCore.Http;
+﻿using System.Net.Http.Headers;
+using System.Text;
 using Microsoft.AspNetCore.Mvc;
-using Nancy;
 using Newtonsoft.Json.Linq;
-using System.Net;
-using System.Text; 
-using Microsoft.Extensions.Configuration;
 
 namespace Main.Controllers
 {
@@ -121,5 +116,53 @@ namespace Main.Controllers
 
             return null;
         }
+        [HttpGet]
+        public async Task<PlaylistViewModel> Get_Playlists_Shared(string User_Id)
+        {
+            string endpointUrl = $"https://api.spotify.com/v1/users/{User_Id}/playlists";
+
+            var response = await CallSpotifyApiAsync(endpointUrl);
+
+            var PlaylistViewModel = await Get_Playlist_Users_Details(response);
+
+
+            return PlaylistViewModel;
+        }
+
+        [HttpGet]
+        private async Task<PlaylistViewModel> Get_Playlist_Users_Details(JObject response)
+        {
+            PlaylistViewModel PlaylistViewModel = new PlaylistViewModel
+            {
+                Total = response["total"]?.ToString(),
+            };
+
+            foreach (var item in response["items"])
+            {
+
+
+                var playlistItem = new PlaylistItemModel
+                {
+                    Name = item["name"]?.ToString(),
+                    Tracks = item["tracks"]?.ToString(),
+                    Id = item["id"]?.ToString(),
+                    Uri = item["uri"]?.ToString(),
+
+                    Get_Playlists_Jarray = response["items"] as JArray,
+
+                    NameUriKey = new Dictionary<string, string>
+                    {
+
+                    }
+
+
+                };
+
+                PlaylistViewModel.Playlists.Add(playlistItem);
+            }
+            return PlaylistViewModel;
+        }
+
+
     }
 }

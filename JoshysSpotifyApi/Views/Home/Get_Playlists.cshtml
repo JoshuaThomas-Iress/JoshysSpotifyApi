@@ -18,17 +18,25 @@
     </div>
 } *@
 
+
 @{
 	int count = 0;
-    foreach (var playlist in ViewBag.Playlists_Name)
+    foreach (var playlist in Model.Playlists)
     {
-        <p>@playlist["name"]</p>
-		if (++count == 7) break;
+        <li>@playlist.Name</li>
+        <p>@playlist.Id</p>
+
+
+
+
+        if (++count == 7) 
+        {
+            break;
+        }
     }
-
+    
 }
 
 
-@{
-	<p>Total Playlists: @ViewBag.Playlists_Total</p>
-}
+
+

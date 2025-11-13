@@ -21,6 +21,6 @@
 
     public class EpisodesViewModel
     {
-        public string Episode { get; set; }
+        public List<EpisodeModel> firstShowEpisode { get; set; }
     }
 }
