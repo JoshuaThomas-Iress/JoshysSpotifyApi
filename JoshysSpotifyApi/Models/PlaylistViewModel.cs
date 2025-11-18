@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json.Linq;
+namespace Main.Models{
 
 public class PlaylistItemModel
 {
@@ -11,7 +12,7 @@ public class PlaylistItemModel
     public Dictionary<string, string> NameUriKey { get; set; }
     public Dictionary<string, string> NameIdKey { get; set; } = new Dictionary<string, string>();   
     public JArray Get_Playlists_Jarray { get; set; } = new JArray();
-    public JArray Get_Tracks_Jarray { get; set; }
+    public JArray Get_Tracks_JArray { get; set; }
 }
 
 // Represents ALL the data for the Get_Playlists.cshtml page
@@ -24,4 +25,5 @@ public class PlaylistViewModel
     {
         Playlists = new List<PlaylistItemModel>();
     }
+}
 }

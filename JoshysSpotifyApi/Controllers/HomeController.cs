@@ -54,7 +54,7 @@ namespace Main.Controllers
         }
 
 
-        [HttpGet]
+        [HttpPost]
         [Route("/Playlist/Get_Playlists")]
         public async Task<IActionResult> Get_Playlists()
         {
@@ -73,7 +73,7 @@ namespace Main.Controllers
 
 
         [Route("/Delete_Playlist")]
-
+        [HttpGet]
         public async Task<IActionResult> Get_Tracks_To_Query_For_Deletion(string User_Query)
         {
             string User_Id = await Get_User_Id();
@@ -106,13 +106,16 @@ namespace Main.Controllers
             {
                 throw new Exception("Playlist not found for the given query.");
             }
+            string endpointUrl_PlaylistsURIs = $"https://api.spotify.com/v1/playlists/{FoundId}/tracks?fields=items(track(name,uri,total))";
 
-            string endpointUrl_PlaylistsURIs = $"https://api.spotify.com/v1/playlists/{FoundId}/tracks.items(track(name,uri,total))";
 
             var response = await _sharedAuthHome.CallSpotifyApiAsync(endpointUrl_PlaylistsURIs);
 
+
+
+
             PlaylistItemModel MyItemModel = new PlaylistItemModel();
-            MyItemModel.Get_Tracks_Jarray.Add(response);
+            MyItemModel.Get_Tracks_JArray.Add(response);
 
             foreach (var item in response["items"])
             {
@@ -124,21 +127,21 @@ namespace Main.Controllers
 
 
 
-        [HttpDelete]
+        [HttpPost]
         [Route("/Delete_Playlists")]
         public async Task<IActionResult> Delete_Item_Playlist(List<string> User_Query_Tracks, string Playlist_Id)
         {
             PlaylistItemModel MyItemModel = new PlaylistItemModel();
-            var Tracks = new List<JToken>(); // FIX: Declare and initialize Tracks
+            var Tracks = new List<JToken>(); 
 
             foreach (string song in User_Query_Tracks)
             {
                 string NameOfTrackToAdd = song;
 
-                JToken JTokenToDeletename = MyItemModel.Get_Tracks_Jarray
+                JToken JTokenToDeletename = MyItemModel.Get_Tracks_JArray
                     .FirstOrDefault(token => token["uri"]?.Value<string>() == NameOfTrackToAdd);
 
-                if (JTokenToDeletename != null) // FIX: Only add if found
+                if (JTokenToDeletename != null) 
                 {
                     Tracks.Add(JTokenToDeletename);
                 }
@@ -241,7 +244,7 @@ namespace Main.Controllers
             return View("Get_Podcasts", shows);
         }
 
-
+        [HttpGet]
         private async Task<(List<string>, List<string>)> Get_Podcasts_Episodes(string id)
         {
             List<string> name = new List<string>();
