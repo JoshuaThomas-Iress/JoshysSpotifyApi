@@ -1,6 +1,7 @@
 ﻿using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Web;
+using Main.Services;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json.Linq;
 
@@ -11,19 +12,19 @@ namespace Main.Controllers
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthController> _logger;
-
-
-        private readonly SharedAuthHome _sharedAuthHome;
+        private readonly SpotifyService _spotifyService;
+  
 
         public AuthController(IConfiguration configuration,
                               IHttpClientFactory httpClientFactory,
                               ILogger<AuthController> logger,
-                              SharedAuthHome sharedAuthHome)
+                     
+                              SpotifyService spotifyService)
         {
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
             _logger = logger;
-            _sharedAuthHome = sharedAuthHome;
+            _spotifyService = spotifyService;
         }
 
 
@@ -86,7 +87,7 @@ namespace Main.Controllers
                 try
                 {
                     // Rename the local variable to avoid CS0136 error
-                    var (refreshToken, accessToken, responseJson) = await _sharedAuthHome.Access_Token_Process(code, ClientCredentials);
+                    var (refreshToken, accessToken, responseJson) = await _spotifyService.Access_Token_Process(code, ClientCredentials);
 
 
                     //For testing

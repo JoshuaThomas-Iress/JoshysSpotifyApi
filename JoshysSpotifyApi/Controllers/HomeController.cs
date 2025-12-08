@@ -1,8 +1,8 @@
-﻿using System.Web;
-using Main.Models;
+﻿using Main.Models;
 using Microsoft.AspNetCore.Mvc;
-using Nest;
 using Newtonsoft.Json.Linq;
+using System.Web;
+using Main.Services;
 
 namespace Main.Controllers
 {
@@ -13,17 +13,20 @@ namespace Main.Controllers
         private readonly ILogger<HomeController> _logger;
 
 
-        private readonly SharedAuthHome _sharedAuthHome;
+     
+        private readonly SpotifyService _spotifyService;
 
         public HomeController(IConfiguration configuration,
                               IHttpClientFactory httpClientFactory,
                               ILogger<HomeController> logger,
-                              SharedAuthHome sharedAuthHome)
+                      
+                              SpotifyService spotifyService)
         {
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
             _logger = logger;
-            _sharedAuthHome = sharedAuthHome;
+       
+            _spotifyService = spotifyService;
         }
 
         public IActionResult Index()
@@ -33,124 +36,101 @@ namespace Main.Controllers
             return View();
         }
 
+        
+
+
         [HttpGet]
-        public async Task<string> Get_User_Id()
-        {
-
-
-
-            string endpointUrl = "https://api.spotify.com/v1/me";
-
-
-            JObject userProfile = await _sharedAuthHome.CallSpotifyApiAsync(endpointUrl);
-
-            string User_Id = userProfile["id"]?.ToString();
-
-            if (User_Id == null)
-            {
-                throw new Exception();
-            }
-            return User_Id;
-        }
-
-
-        [HttpPost]
         [Route("/Playlist/Get_Playlists")]
         public async Task<IActionResult> Get_Playlists()
         {
 
 
-            string User_Id = await Get_User_Id();
+            string User_Id = await _spotifyService.Get_User_Id();
 
-            var PlaylistViewModel = await _sharedAuthHome.Get_Playlists_Shared(User_Id);
+            var PlaylistViewModel = await _spotifyService.Get_Playlists_Shared(User_Id);
 
             return View("Get_Playlists", PlaylistViewModel);
 
         }
 
-
-
-
-
-        [Route("/Delete_Playlist")]
+        [Route("/Home/Delete_Playlists")]
         [HttpGet]
+        public IActionResult Delete_Playlist()
+        {
+            return View("Delete_Playlists");
+        }
+
+       
+        [HttpGet] 
         public async Task<IActionResult> Get_Tracks_To_Query_For_Deletion(string User_Query)
         {
-            string User_Id = await Get_User_Id();
+            string User_Id = await _spotifyService.Get_User_Id();
 
-            var PlaylistViewModel = await _sharedAuthHome.Get_Playlists_Shared(User_Id);
+            var PlaylistViewModel = await _spotifyService.Get_Playlists_Shared(User_Id);
 
-            foreach (var item in PlaylistViewModel.Playlists)
+            var MyItemModel = await _spotifyService.Retrive_PlaylistItemModel(User_Query);
+
+  
+            var Uri_JObject = await _spotifyService.Create_Uri_JObject(MyItemModel.playlist_tracks_JObject);
+
+            var Uri_Dictionary = await _spotifyService.Convert_JObject_To_Dictionary(Uri_JObject);
+
+            var Tracks_Dictionary = Uri_Dictionary.Except(MyItemModel.NameUriKey).Concat(MyItemModel.NameUriKey.Except(Uri_Dictionary));
+
+            var tracks = await _spotifyService.Convert_Dictionary_To_JObject(Tracks_Dictionary.ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
+
+            MyItemModel.playlist_tracks_JObject = new JObject();
+
+            foreach (var item in tracks)
             {
-                item.NameIdKey.Add(item.Name, item.Id);
+
+
+                MyItemModel.playlist_tracks_JObject.Add(item.Key, item.Value);
+
+
             }
-            string FoundName = null;
-            string FoundId = null;
+           
+            JObject testtracks = MyItemModel.playlist_tracks_JObject;
 
-            foreach (var playlist in PlaylistViewModel.Playlists)
-            {
-                foreach (var item in playlist.NameIdKey)
-                {
-                    if (User_Query.Contains(playlist.Name))
-                    {
-                        FoundId = item.Value;
-                        FoundName = item.Key;
-                        break;
-                    }
-                }
-                if (FoundId != null)
-                    break;
-            }
-
-            if (FoundId == null)
-            {
-                throw new Exception("Playlist not found for the given query.");
-            }
-            string endpointUrl_PlaylistsURIs = $"https://api.spotify.com/v1/playlists/{FoundId}/tracks?fields=items(track(name,uri,total))";
-
-
-            var response = await _sharedAuthHome.CallSpotifyApiAsync(endpointUrl_PlaylistsURIs);
-
-
-
-
-            PlaylistItemModel MyItemModel = new PlaylistItemModel();
-            MyItemModel.Get_Tracks_JArray.Add(response);
-
-            foreach (var item in response["items"])
-            {
-                MyItemModel.NameUriKey.Add(item["name"].ToString(), item["uri"].ToString());
-            }
-
-            return View();
+            return Content(MyItemModel.playlist_tracks_JObject.ToString(), "application/json");
         }
+
+     
+           
+
+        public async Task<IActionResult> Song_Query(string User_Query)
+        {
+            PlaylistItemModel MyItemModel = new PlaylistItemModel();
+            MyItemModel.playlist_tracks_JObject = new JObject();
+
+            foreach (string track in User_Query.Trim().Split(','))
+            {
+                if (MyItemModel.playlist_tracks_JObject.ContainsKey(track))
+                {
+                    MyItemModel.playlist_tracks_JObject.Remove(track);
+                    return View(MyItemModel.playlist_tracks_JObject);
+                }
+            }
+            return View("Delete_Playlists",MyItemModel.playlist_tracks_JObject);
+        }
+        
+
+
 
 
 
         [HttpPost]
         [Route("/Delete_Playlists")]
-        public async Task<IActionResult> Delete_Item_Playlist(List<string> User_Query_Tracks, string Playlist_Id)
+        public async Task<IActionResult> Delete_Item_Playlist(List<string>? User_Query_Tracks, string Playlist_Id)
         {
             PlaylistItemModel MyItemModel = new PlaylistItemModel();
-            var Tracks = new List<JToken>(); 
+            
+            var tracks = MyItemModel.playlist_tracks_JObject;
 
-            foreach (string song in User_Query_Tracks)
-            {
-                string NameOfTrackToAdd = song;
+            string endpointUrl = $"https://api.spotify.com/v1/playlists/{Playlist_Id}/{tracks}";
 
-                JToken JTokenToDeletename = MyItemModel.Get_Tracks_JArray
-                    .FirstOrDefault(token => token["uri"]?.Value<string>() == NameOfTrackToAdd);
-
-                if (JTokenToDeletename != null) 
-                {
-                    Tracks.Add(JTokenToDeletename);
-                }
-            }
-
-            string endpointUrl = $"https://api.spotify.com/v1/playlists/{Playlist_Id}/{Tracks}";
-
-            var response = await _sharedAuthHome.CallSpotifyApiAsync(endpointUrl);
-
+            var response = await _spotifyService.CallSpotifyApiAsync(endpointUrl);
+             
             return View();
         }
             
@@ -172,7 +152,7 @@ namespace Main.Controllers
         public async Task<IActionResult> Get_Playlist_Items(string PlaylistId)
         {
 
-            var PlaylistItemsViewModel = await _sharedAuthHome.Get_Playlists_Shared(PlaylistId);
+            var PlaylistItemsViewModel = await _spotifyService.Get_Playlists_Shared(PlaylistId);
 
             return View("Get_Playlist_Items", PlaylistItemsViewModel);
 
@@ -207,7 +187,7 @@ namespace Main.Controllers
                 string Encoded_Query = HttpUtility.UrlEncode(query);
                 string endpointUrl = $"https://api.spotify.com/v1/search?q={Encoded_Query}&type=show&limit=5";
 
-                var response = await _sharedAuthHome.CallSpotifyApiAsync(endpointUrl);
+                var response = await _spotifyService.CallSpotifyApiAsync(endpointUrl);
 
                 _logger.LogInformation("--- GET_PODCASTS (GET) METHOD HIT ---");
 
@@ -217,7 +197,7 @@ namespace Main.Controllers
                 {
                     string id = item["id"]?.ToString();
 
-                    var (EpisodeNames, EpisodeDescriptions) = await Get_Podcasts_Episodes(id);
+                    var (EpisodeNames, EpisodeDescriptions) = await _spotifyService.Get_Podcasts_Episodes(id);
 
                     var show = new ShowModel
                     {
@@ -244,33 +224,7 @@ namespace Main.Controllers
             return View("Get_Podcasts", shows);
         }
 
-        [HttpGet]
-        private async Task<(List<string>, List<string>)> Get_Podcasts_Episodes(string id)
-        {
-            List<string> name = new List<string>();
-            List<string> description = new List<string>();
-
-            string endpointUrl = $"https://api.spotify.com/v1/shows/{id}/episodes?limit=5";
-            var response = await _sharedAuthHome.CallSpotifyApiAsync(endpointUrl);
-
-            foreach (var item in (response["items"] as JArray) ?? new JArray())
-            {
-                if (item != null && item.Type == JTokenType.Object)
-                {
-
-                    var episodeName = item["name"]?.ToString();
-                    var episodeDescription = item["description"]?.ToString();
-
-
-                    if (episodeName != null)
-                        name.Add(episodeName);
-                    if (episodeDescription != null)
-                        description.Add(episodeDescription);
-
-                }
-            }
-            return (name, description);
-        }
+       
 
 
     }

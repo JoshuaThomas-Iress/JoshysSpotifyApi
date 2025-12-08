@@ -12,18 +12,21 @@
 	<h1>Search Playlists</h1>
 	<p>Click the button below to search for Playlists.</p>
 
-	<form method="get" asp-action="Delete_Playlists" asp-controller="Home">
 
-		<input type="text" name="User_Query" placeholder="Enter Playlists name" value="@ViewBag.Query" />
+	<form method="get" asp-action="Get_Tracks_To_Query_For_Deletion" asp-controller="Home">
+
+		<input type="text" name="User_Query" placeholder="Enter Playlist" value="@ViewBag.Query" />
 		<button type="submit">Search</button>
+
+	</form>
+<br /></br>	
+	<form method="get" asp-action="Song_Query" asp-controller="Home">
+
+		<input type="text" name="User_Query" placeholder="Enter tracks to delete" value="@ViewBag.Query" />
+		<button type="submit">Search</button>
+
 	</form>
 
 
 
-	<form method="post" asp-action="Delete_Playlists" asp-controller="Home">
-
-		<input type="text" name="User_Query_Tracks" placeholder="Enter Playlists name" value="@ViewBag.Query" />
-		<button type="submit">Search</button>
-
-	</form>
 

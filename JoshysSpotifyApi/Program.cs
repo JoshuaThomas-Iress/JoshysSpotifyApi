@@ -2,10 +2,10 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpContextAccessor(); 
-builder.Services.AddScoped<Main.Controllers.SharedAuthHome>();
-builder.Services.AddHttpClient();
-
+builder.Services.AddScoped<Main.Services.SpotifyService>();
+builder.Services.AddHttpClient(); builder.Services.AddScoped<Main.Services.SpotifyHTTPClient>();
 builder.Services.AddDistributedMemoryCache();
+
 builder.Services.AddSession(options =>
 {
     options.IdleTimeout = TimeSpan.FromMinutes(30);
