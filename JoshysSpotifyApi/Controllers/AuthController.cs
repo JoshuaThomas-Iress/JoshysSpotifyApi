@@ -91,13 +91,13 @@ namespace Main.Controllers
 
 
                     //For testing
-                    string ResponseJson_Temp = responseJson.ToString();
-                    var Access_Token_Temp = accessToken;
-                    var Refresh_Token_Temp = refreshToken;
+                    //string ResponseJson_Temp = responseJson.ToString();
+                    //var Access_Token_Temp = accessToken;
+                    //var Refresh_Token_Temp = refreshToken;
 
                     //TempData["ResponseJson"] = ResponseJson_Temp;
                     //TempData["Access_Token"] = Access_Token_Temp;
-                    TempData["Refresh_Token"] = Refresh_Token_Temp;
+                    //TempData["Refresh_Token"] = Refresh_Token_Temp;
 
 
                     HttpContext.Session.SetString("SpotifyAccessToken", accessToken);

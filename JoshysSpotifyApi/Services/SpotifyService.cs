@@ -54,11 +54,11 @@ namespace Main.Services
                 { "redirect_uri", "https://127.0.0.1:7071/callback" }
             };
 
-            var requestContent = new FormUrlEncodedContent(requestData);
+            
 
-            httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", clientCredentials);
+            string endpointUrl = "https://accounts.spotify.com/api/token";
 
-            using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
+            using HttpResponseMessage response = await _spotifyHttpClient.Post(endpointUrl, requestData ,clientCredentials);
             if (response.IsSuccessStatusCode)
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
@@ -85,7 +85,7 @@ namespace Main.Services
         //https://developer.spotify.com/documentation/web-api/reference/get-list-users-playlists
         //Am I extracting the users playlists id?
         [HttpGet]
-        public async Task<PlaylistViewModel> Get_Playlists_Shared(string User_Id) //move to spotify services
+        public async Task<PlaylistViewModel> Get_Playlists_Shared(string User_Id) 
         {
             string endpointUrl = $"https://api.spotify.com/v1/users/{User_Id}/playlists?fields=items(id,name)";
 
@@ -308,3 +308,4 @@ namespace Main.Services
 
     }
 }
+

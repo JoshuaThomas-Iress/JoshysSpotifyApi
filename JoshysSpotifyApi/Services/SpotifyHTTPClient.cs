@@ -44,6 +44,26 @@ namespace Main.Services
             throw new Exception("Fell out of if statement most likely null");
         }
 
+        public async Task<HttpResponseMessage> Post(string endpointUrl, Dictionary<string, string> requestData, string clientCredentials )
+        {
+            var requestContent = new FormUrlEncodedContent(requestData);
+
+            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", clientCredentials);
+
+            var response = await _client.PostAsync(endpointUrl, requestContent);
+
+            if (response.IsSuccessStatusCode)
+            {
+                return await response.Content.ReadAsStringAsync();
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                _logger.LogError("--- Error ---");
+                throw new Exception("Unauthaorized");
+            }
+
+            throw new Exception("Fell out of if statement most likely null");
+        }
     }
 
 }
