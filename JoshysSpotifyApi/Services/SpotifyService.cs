@@ -2,7 +2,6 @@
 using Main.Models;
 using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json.Linq;
-using System.Net.Http.Headers;
 
 namespace Main.Services
 {
@@ -32,14 +31,16 @@ namespace Main.Services
 
 
             JObject userProfile = await CallSpotifyApiAsync(endpointUrl);
-
-            string User_Id = userProfile["id"]?.ToString();
-
-            if (User_Id == null)
+            if (userProfile != null)
+            {
+                string User_Id = userProfile["id"].ToString();
+                return User_Id;
+            }
+            else
             {
                 throw new Exception();
             }
-            return User_Id;
+           
         }
 
         [HttpPost]
@@ -57,8 +58,8 @@ namespace Main.Services
             
 
             string endpointUrl = "https://accounts.spotify.com/api/token";
-
-            using HttpResponseMessage response = await _spotifyHttpClient.Post(endpointUrl, requestData ,clientCredentials);
+            string Header = null;
+            using HttpResponseMessage response = await _spotifyHttpClient.Post(endpointUrl, requestData, Header,false, clientCredentials);
             if (response.IsSuccessStatusCode)
             {
                 var responseContent = await response.Content.ReadAsStringAsync();
@@ -70,7 +71,7 @@ namespace Main.Services
             }
             else
             {
-                return (null, null, null);
+                throw new Exception("Failed to obtain access token");
             }
         }
 
@@ -271,23 +272,24 @@ namespace Main.Services
         }
 
         [HttpPost]
-        public async Task<(string Refresh_Token, string Access_Token)> Refresh_Token_Process(string refreshToken, string Access_Token)//move to spotify services
+        public async Task<(string Refresh_Token, string Access_Token)> Refresh_Token_Process(string refreshToken, string Access_Token, string clientCredentials)//move to spotify services
         {
             if (!string.IsNullOrEmpty(refreshToken))
             {
-                var RequestDataBody = new Dictionary<string, string>
+                var requestData = new Dictionary<string, string>
                 {
                     { "grant_type", "refresh_token" },
                     { "refresh_token", refreshToken }
                 };
-                var requestContent = new FormUrlEncodedContent(RequestDataBody);
+             
 
                 var httpClient = _httpClientFactory.CreateClient();
 
-                string Content_Type = "application/x-www-form-urlencoded";
-
-                httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", Content_Type);
-                using HttpResponseMessage response = await httpClient.PostAsync("https://accounts.spotify.com/api/token", requestContent);
+                string Header = "application/x-www-form-urlencoded";
+                bool bearerBool = true;
+                string endpoint_url = "https://accounts.spotify.com/api/token";
+               
+                using HttpResponseMessage response = await _spotifyHttpClient.Post(endpoint_url, requestData, clientCredentials, bearerBool,Header );
 
                 if (response.IsSuccessStatusCode)
                 {

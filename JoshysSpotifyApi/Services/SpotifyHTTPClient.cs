@@ -1,5 +1,6 @@
 ﻿using Main.Controllers;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Diagnostics;
 using Newtonsoft.Json.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -44,25 +45,46 @@ namespace Main.Services
             throw new Exception("Fell out of if statement most likely null");
         }
 
-        public async Task<HttpResponseMessage> Post(string endpointUrl, Dictionary<string, string> requestData, string clientCredentials )
+        public async Task<HttpResponseMessage> Post(string endpointUrl, Dictionary<string, string> requestData, string? Header, bool bearerBool, string clientCredentials)
         {
             var requestContent = new FormUrlEncodedContent(requestData);
 
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", clientCredentials);
-
-            var response = await _client.PostAsync(endpointUrl, requestContent);
-
-            if (response.IsSuccessStatusCode)
+            if (bearerBool = true)
             {
-                return await response.Content.ReadAsStringAsync();
+                _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", clientCredentials);
+                var response = await _client.PostAsync(endpointUrl, requestContent);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return response;
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogError("--- Error ---");
+                    throw new Exception("Unauthaorized");
+                }
             }
-            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            else
             {
-                _logger.LogError("--- Error ---");
-                throw new Exception("Unauthaorized");
+                _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Header);
+                var response = await _client.PostAsync(endpointUrl, requestContent);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    return response;
+                }
+                else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+                {
+                    _logger.LogError("--- Error ---");
+                    throw new Exception("Unauthaorized");
+                }
             }
 
-            throw new Exception("Fell out of if statement most likely null");
+             
+
+            
+
+            throw new Exception("Fell out of if statement");
         }
     }
 
