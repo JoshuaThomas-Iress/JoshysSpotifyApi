@@ -1,7 +1,11 @@
 ﻿using Main.Controllers;
+using Main.Interfaces;
 using Main.Models;
 using Microsoft.AspNetCore.Mvc;
+using Nest;
 using Newtonsoft.Json.Linq;
+using System.Diagnostics.CodeAnalysis;
+using System.Web;
 
 namespace Main.Services
 {
@@ -11,17 +15,16 @@ namespace Main.Services
         private readonly IConfiguration _configuration;
         private readonly ILogger<HomeController> _logger;
     
-        private readonly SpotifyHTTPClient _spotifyHttpClient;
+        private readonly ISpotifyHTTPClient _spotifyHttpClient;
         public SpotifyService(IConfiguration configuration,
                              IHttpClientFactory httpClientFactory,
                              ILogger<HomeController> logger,
-                      
-                             SpotifyHTTPClient spotifyHttpClient)
+                             ISpotifyHTTPClient spotifyClient)
         {
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
             _logger = logger;
-            _spotifyHttpClient = spotifyHttpClient;
+            _spotifyHttpClient = spotifyClient;
         }
 
         [HttpGet]
@@ -46,8 +49,6 @@ namespace Main.Services
         [HttpPost]
         public async Task<(string Refresh_Token, string Access_Token, JObject ResponseJson)> Access_Token_Process(string code, string clientCredentials)//move to spotify services
         {
-            var httpClient = _httpClientFactory.CreateClient();
-
             var requestData = new Dictionary<string, string>
             {
                 { "grant_type", "authorization_code" },
@@ -59,11 +60,16 @@ namespace Main.Services
 
             string endpointUrl = "https://accounts.spotify.com/api/token";
             string Header = null;
-            using HttpResponseMessage response = await _spotifyHttpClient.Post(endpointUrl, requestData, Header,false, clientCredentials);
+            using HttpResponseMessage response = await _spotifyHttpClient.Post(endpointUrl, requestData, Header, false, clientCredentials);
+            return await Access_Token_Process_Check(response);
+        }
+        
+        public async Task<(string Refresh_Token, string Access_Token, JObject ResponseJson)> Access_Token_Process_Check(HttpResponseMessage response)
+        {
             if (response.IsSuccessStatusCode)
             {
-                var responseContent = await response.Content.ReadAsStringAsync();
-                var ResponseJson = JObject.Parse(responseContent);
+                var ResponseContent = await response.Content.ReadAsStringAsync();
+                var ResponseJson = JObject.Parse(ResponseContent);
                 string Access_Token = ResponseJson["access_token"].ToString();
                 string Refresh_Token_Output = ResponseJson["refresh_token"].ToString();
 
@@ -71,23 +77,28 @@ namespace Main.Services
             }
             else
             {
-                throw new Exception("Failed to obtain access token");
+                throw new Exception("Failed to retrieve access token from Spotify.");
             }
+
         }
 
-        [HttpGet]
+
+
+
+            [HttpGet]
         public async Task<JObject> CallSpotifyApiAsync(string endpointUrl)
         {
             var response = await _spotifyHttpClient.Get(endpointUrl);
             return JObject.Parse(response);
         }
 
+        
 
-        //https://developer.spotify.com/documentation/web-api/reference/get-list-users-playlists
-        //Am I extracting the users playlists id?
         [HttpGet]
         public async Task<PlaylistViewModel> Get_Playlists_Shared(string User_Id) 
         {
+          
+
             string endpointUrl = $"https://api.spotify.com/v1/users/{User_Id}/playlists?fields=items(id,name)";
 
             var response = await CallSpotifyApiAsync(endpointUrl);
@@ -99,7 +110,7 @@ namespace Main.Services
         }
 
         [HttpGet]
-        private async Task<PlaylistViewModel> Get_Playlist_Users_Details(JObject response)//move to spotify services
+        public async Task<PlaylistViewModel> Get_Playlist_Users_Details(JObject response)//move to spotify services
         {
             PlaylistViewModel PlaylistViewModel = new PlaylistViewModel
             {
@@ -118,17 +129,14 @@ namespace Main.Services
 
 
                     Get_Playlists_Jarray = response["items"] as JArray,
-
-
-
                 };
 
                 PlaylistViewModel.Playlists.Add(playlistItem);
             }
             return PlaylistViewModel;
         }
-
-        public async Task<JObject> Create_Uri_JObject(JObject response)//move to spotify services
+        //Delete playlist method doesnt work since it passes a null JObject to this function
+        public async Task<JObject> Create_Uri_JObject(JObject response)
         {
             JObject Uri_JObject = new JObject();
 
@@ -169,8 +177,52 @@ namespace Main.Services
         }
 
 
+        public async Task<ActionResult<List<ShowModel>>> Get_Podcasts(string query)
+        {
+            List<ShowModel> shows = new List<ShowModel>();
+
+            if (!string.IsNullOrEmpty(query))
+            {
+                string Encoded_Query = HttpUtility.UrlEncode(query);
+                string endpointUrl = $"https://api.spotify.com/v1/search?q={Encoded_Query}&type=show&limit=5";
+
+                var response = await CallSpotifyApiAsync(endpointUrl);
+
+                _logger.LogInformation("--- GET_PODCASTS (GET) METHOD HIT ---");
+
+                int count = 0;
+
+                foreach (var item in response["shows"]?["items"])
+                {
+                    string id = item["id"]?.ToString();
+
+                    var (EpisodeNames, EpisodeDescriptions) = await Get_Podcasts_Episodes(id);
+
+                    var show = new ShowModel
+                    {
+                        Id = id,
+                        Name = item["name"]?.ToString(),
+                        Description = item["description"]?.ToString(),
+                        Episodes = new List<EpisodeModel>()
+                    };
+                    for (int i = 0; i < EpisodeNames.Count; i++)
+                    {
+                        show.Episodes.Add(new EpisodeModel
+                        {
+                            Name = EpisodeNames[i],
+                        });
+                    }
+
+                    shows.Add(show);
+
+                    if (++count == 5) break;
+                }
+            }
+            return (shows);
+        }
+
         [HttpGet]
-        public async Task<(List<string>, List<string>)> Get_Podcasts_Episodes(string id)
+        private async Task<(List<string>, List<string>)> Get_Podcasts_Episodes(string id)
         {
             List<string> name = new List<string>();
             List<string> description = new List<string>();
@@ -186,7 +238,6 @@ namespace Main.Services
                     var episodeName = item["name"]?.ToString();
                     var episodeDescription = item["description"]?.ToString();
 
-
                     if (episodeName != null)
                         name.Add(episodeName);
                     if (episodeDescription != null)
@@ -197,8 +248,8 @@ namespace Main.Services
             return (name, description);
         }
 
-
-        public async Task<PlaylistItemModel> Retrive_PlaylistItemModel(string User_Query) 
+        //seperate into 2 methods when possible
+        internal async Task<PlaylistItemModel> Retrive_PlaylistItemModel(string User_Query) 
         {
             string userId = await Get_User_Id();
             PlaylistViewModel playlistViewModel = await Get_Playlists_Shared(userId);
@@ -237,7 +288,7 @@ namespace Main.Services
             string endpointUrl_PlaylistsURIs = $"https://api.spotify.com/v1/playlists/{FoundId}/tracks?fields=items(track(name,uri,total))";
 
 
-            var response = await CallSpotifyApiAsync(endpointUrl_PlaylistsURIs);
+            JObject response = await CallSpotifyApiAsync(endpointUrl_PlaylistsURIs);
 
 
 
@@ -251,12 +302,25 @@ namespace Main.Services
             {
                 var track = item["track"];
 
+                if (track != null && track.Type != JTokenType.Null)
+                {
+                   
+                    if (track["name"] != null)
+                    {
+                        string key = track["name"].ToString();
+                        string value = track["uri"]?.ToString();
+                        MyItemModel.NameUriKey[key] = value;
+                    }
+                }
+                else
+                {
+                   
+                    string key = "Unknown_" + Guid.NewGuid().ToString(); 
+                    MyItemModel.NameUriKey[key] = null;
+                }
 
 
-                string key = track["name"].ToString();
-                string value = track["uri"].ToString();
 
-                MyItemModel.NameUriKey[key] = value;
             }
 
 
@@ -293,8 +357,8 @@ namespace Main.Services
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var responseContent = await response.Content.ReadAsStringAsync();
-                    var ResponseJson = JObject.Parse(responseContent);
+                    var ResponseContent = await response.Content.ReadAsStringAsync();
+                    var ResponseJson = JObject.Parse(ResponseContent);
 
                     Access_Token = ResponseJson["access_token"].ToString();
                     var Refresh_Token = ResponseJson["refresh_token"].ToString();

@@ -1,7 +1,6 @@
 ﻿@using Main.Models
 @model List<Main.Models.ShowModel>
 
-
 @{
 	ViewData["Title"] = "Get_podcasts";
 }
@@ -13,21 +12,27 @@
 	<p>Click the button below to search for podcasts.</p>
 
 	<form method="get" asp-action="Get_Podcasts" asp-controller="Home">
-
 		<input type="text" name="query" placeholder="Enter podcast name" value="@ViewBag.Query" />
 		<button type="submit">Search</button>
 	</form>
 
 	<div>
-
 		@{
-			
+			const int MaxLength = 550;
 			if (Model != null)
 			{
 				foreach (var show in Model)
 				{
 					<h3>@show.Name</h3>
-					<p>@show.Description</p>
+					if (show.Description.Length > MaxLength)
+					{
+						var description = show.Description.Substring(0, MaxLength);
+						<p>@description</p>
+					}
+					else
+					{
+						<p>@show.Description</p>
+					}
 
 					var firstFiveEpisodes = show.Episodes.Take(5);
 
@@ -37,7 +42,6 @@
 						// 3. Print each one's name ONCE
 						<p>@episode.Name</p>
 					}
-						
 				}
 			}
 		}

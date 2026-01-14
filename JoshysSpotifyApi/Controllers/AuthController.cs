@@ -12,12 +12,12 @@ namespace Main.Controllers
         private readonly SpotifyService _spotifyService;
         private readonly AuthSpotifyService _authSpotifyService;
 
-
-        public AuthController(IConfiguration configuration,
-                              IHttpClientFactory httpClientFactory,
-                              ILogger<AuthController> logger,
-                              AuthSpotifyService authSpotifyService,    
-                              SpotifyService spotifyService)
+        public AuthController(
+            IConfiguration configuration,
+            IHttpClientFactory httpClientFactory,
+            ILogger<AuthController> logger,
+            AuthSpotifyService authSpotifyService,
+            SpotifyService spotifyService)
         {
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
@@ -26,56 +26,31 @@ namespace Main.Controllers
             _authSpotifyService = authSpotifyService;
         }
 
-
         public IActionResult Login(bool? fromPlaylist = false)
         {
-
-
-
             if (fromPlaylist == true)
             {
-                
                 TempData["ReturnUrl"] = "Playlist";
-                return Redirect(_authSpotifyService.login_Helper());
-
+                
             }
-            else
-            {
+            
                 return Redirect(_authSpotifyService.login_Helper());
-            }
-
-
+            
         }
-
-
 
         [HttpGet]
         [Route("/callback")]
         public async Task<IActionResult> Callback(string code, string error)
         {
-                 await _authSpotifyService.Callback_Helper(code, error);
+             await _authSpotifyService.Callback_Helper(code, error);
 
-                if (TempData["ReturnUrl"] != null && TempData["ReturnUrl"].ToString() == "Playlist")
-
-                {
-                    return RedirectToAction("Get_Playlists", "Home");
-                }
-
-
-
-                return RedirectToAction("Index", "Home");
+            if (TempData["ReturnUrl"] != null && TempData["ReturnUrl"].ToString() == "Playlist")
+            {
+                return RedirectToAction("Get_Playlists", "Home");
             }
-
 
             return RedirectToAction("Index", "Home");
         }
-
-
-
     }
-
-        
-
-
 }
 
