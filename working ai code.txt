@@ -1,3 +1,0 @@
-
-Get current users Playlist -> return playlist id --> https://api.spotify.com/v1/playlists/{playlist_id}/ ["items"],?["track"],["TrackObject"],["uri"] //this returns uri for each song -->pair uri to song --> query user which song to delete -->
-use uri pair to delete track
