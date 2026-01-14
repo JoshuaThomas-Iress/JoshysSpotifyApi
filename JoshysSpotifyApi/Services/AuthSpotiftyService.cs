@@ -1,8 +1,7 @@
-﻿using Elasticsearch.Net;
-using Main.Controllers;
-using Main.Models;
-using Microsoft.AspNetCore.Mvc;
+﻿using Main.Controllers;
+using Main.Interfaces;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
 using Newtonsoft.Json.Linq;
 using System.Web;
 
@@ -14,23 +13,25 @@ namespace Main.Services
         private readonly IConfiguration _configuration;
         private readonly ILogger<HomeController> _logger;
         private readonly SpotifyService _spotifyService;
-        private readonly SpotifyHTTPClient _spotifyHttpClient;
         private readonly IHttpContextAccessor _httpContextAccessor;
+
+        // ✅ We only keep the Interface here
+        private readonly ISpotifyHTTPClient _client;
 
         public AuthSpotifyService(
             IConfiguration configuration,
             IHttpClientFactory httpClientFactory,
             ILogger<HomeController> logger,
             SpotifyService spotifyService,
-            SpotifyHTTPClient spotifyHttpClient,
-            IHttpContextAccessor httpContextAccessor)
+            IHttpContextAccessor httpContextAccessor,
+            ISpotifyHTTPClient client) 
         {
             _configuration = configuration;
             _httpClientFactory = httpClientFactory;
             _logger = logger;
-            _spotifyHttpClient = spotifyHttpClient;
-            _spotifyService = spotifyService;   
+            _spotifyService = spotifyService;
             _httpContextAccessor = httpContextAccessor;
+            _client = client;
         }
 
         public string login_Helper()

@@ -69,8 +69,7 @@ namespace Main.Controllers
             var PlaylistViewModel = await _spotifyService.Get_Playlists_Shared(User_Id);
 
             var MyItemModel = await _spotifyService.Retrive_PlaylistItemModel(User_Query);
-
-  
+ 
             var Uri_JObject = await _spotifyService.Create_Uri_JObject(MyItemModel.playlist_tracks_JObject);
 
             var Uri_Dictionary = await _spotifyService.Convert_JObject_To_Dictionary(Uri_JObject);
@@ -79,7 +78,7 @@ namespace Main.Controllers
 
             var tracks = await _spotifyService.Convert_Dictionary_To_JObject(Tracks_Dictionary.ToDictionary(kvp => kvp.Key, kvp => kvp.Value));
 
-            MyItemModel.playlist_tracks_JObject = new JObject();
+           
 
             foreach (var item in tracks)
             {
@@ -101,7 +100,7 @@ namespace Main.Controllers
         public async Task<IActionResult> Song_Query(string User_Query)
         {
             PlaylistItemModel MyItemModel = new PlaylistItemModel();
-            MyItemModel.playlist_tracks_JObject = new JObject();
+            
 
             foreach (string track in User_Query.Trim().Split(','))
             {
@@ -123,8 +122,8 @@ namespace Main.Controllers
         [Route("/Delete_Playlists")]
         public async Task<IActionResult> Delete_Item_Playlist(List<string>? User_Query_Tracks, string Playlist_Id)
         {
-            PlaylistItemModel MyItemModel = new PlaylistItemModel();
-            
+            var MyItemModel = await _spotifyService.Retrive_PlaylistItemModel(Playlist_Id);
+
             var tracks = MyItemModel.playlist_tracks_JObject;
 
             string endpointUrl = $"https://api.spotify.com/v1/playlists/{Playlist_Id}/{tracks}";
@@ -180,48 +179,14 @@ namespace Main.Controllers
         [HttpGet]
         public async Task<IActionResult> Get_Podcasts(string query)
         {
-            List<ShowModel> shows = new List<ShowModel>();
 
-            if (!string.IsNullOrEmpty(query))
-            {
-                string Encoded_Query = HttpUtility.UrlEncode(query);
-                string endpointUrl = $"https://api.spotify.com/v1/search?q={Encoded_Query}&type=show&limit=5";
 
-                var response = await _spotifyService.CallSpotifyApiAsync(endpointUrl);
+            var result = await _spotifyService.Get_Podcasts(query);
 
-                _logger.LogInformation("--- GET_PODCASTS (GET) METHOD HIT ---");
+         
+            var showList = result.Value;
 
-                int count = 0;
-
-                foreach (var item in response["shows"]?["items"])
-                {
-                    string id = item["id"]?.ToString();
-
-                    var (EpisodeNames, EpisodeDescriptions) = await _spotifyService.Get_Podcasts_Episodes(id);
-
-                    var show = new ShowModel
-                    {
-                        Id = new List<string> { id },
-                        Name = item["name"]?.ToString(),
-                        Description = item["description"]?.ToString(),
-                        Episodes = new List<EpisodeModel>()
-                    };
-                    for (int i = 0; i < EpisodeNames.Count; i++)
-                    {
-                        show.Episodes.Add(new EpisodeModel
-                        {
-                            Name = EpisodeNames[i],
-
-                        });
-                    }
-
-                    shows.Add(show);
-
-                    if (++count == 5) break;
-                }
-            }
-
-            return View("Get_Podcasts", shows);
+            return View("Get_Podcasts", showList);
         }
 
        

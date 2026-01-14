@@ -1,31 +1,29 @@
-﻿using Main.Controllers;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Diagnostics;
-using Newtonsoft.Json.Linq;
-using System.Net.Http;
-using System.Net.Http.Headers;
-//MOVE ALL TO SERVICES
+﻿using System.Net.Http.Headers;
+using Main.Interfaces;
+
 namespace Main.Services
 {
-    public class SpotifyHTTPClient
+    public class SpotifyHTTPClient : ISpotifyHTTPClient
     {
         private readonly ILogger<SpotifyHTTPClient> _logger;
         private readonly HttpClient _client;
-     
+        public object response { get; set; }
 
-        public SpotifyHTTPClient(IHttpClientFactory httpClientFactory, IHttpContextAccessor httpContextAccessor, ILogger<SpotifyHTTPClient> logger)
+      
+        public SpotifyHTTPClient(HttpClient client, IHttpContextAccessor httpContextAccessor, ILogger<SpotifyHTTPClient> logger)
         {
-            var session = httpContextAccessor?.HttpContext?.Session ?? throw new InvalidOperationException("HTTP context is not available.");
+            _client = client; 
+            _logger = logger;
 
+            var session = httpContextAccessor?.HttpContext?.Session ?? throw new InvalidOperationException("HTTP context is not available.");
             var accessToken = session.GetString("SpotifyAccessToken");
 
+           
+            if (!string.IsNullOrEmpty(accessToken))
+            {
+                _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            }
 
-            _client = httpClientFactory.CreateClient();
-            _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
-            _logger = logger;
-           
-        
-           
         }
 
         public async Task<string> Get(string endpointUrl)
@@ -49,44 +47,32 @@ namespace Main.Services
         {
             var requestContent = new FormUrlEncodedContent(requestData);
 
+
             if (bearerBool = true)
             {
                 _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", clientCredentials);
-                var response = await _client.PostAsync(endpointUrl, requestContent);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    return response;
-                }
-                else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                {
-                    _logger.LogError("--- Error ---");
-                    throw new Exception("Unauthaorized");
-                }
             }
             else
             {
                 _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Basic", Header);
-                var response = await _client.PostAsync(endpointUrl, requestContent);
-
-                if (response.IsSuccessStatusCode)
-                {
-                    return response;
-                }
-                else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
-                {
-                    _logger.LogError("--- Error ---");
-                    throw new Exception("Unauthaorized");
-                }
             }
 
-             
+            var response = await _client.PostAsync(endpointUrl, requestContent);
 
-            
+            if (response.IsSuccessStatusCode)
+            {
+                return response;
+            }
+            else if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                _logger.LogError("--- Error ---");
+                throw new Exception("Unauthaorized");
+            }
 
-            throw new Exception("Fell out of if statement");
+
+
+            throw new Exception("Fell out of if statement most likely null");
         }
     }
 
 }
-
